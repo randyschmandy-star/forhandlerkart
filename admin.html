@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forhandlerkart – Backend</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+
+<script src="firebase-config.js"></script>
+
+<style>
+  :root {
+    --brand: #8B4513;
+    --bg: #f6f5f3;
+    --card: #ffffff;
+    --border: #e2e0db;
+    --text: #2b2b2b;
+    --muted: #767267;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    background: var(--brand);
+    color: #fff;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header button {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  header button:hover { background: rgba(255,255,255,0.28); }
+
+  main {
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 16px 60px;
+    display: none;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 850px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    font-size: 15px;
+    margin: 0 0 14px;
+    color: var(--text);
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
+    margin: 12px 0 4px;
+  }
+  input[type=text], input[type=email], input[type=password], textarea, select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+  }
+  textarea { resize: vertical; min-height: 50px; }
+  .rad { display: flex; align-items: center; gap: 10px; }
+  .rad input[type=range] { flex: 1; }
+  .rad span { font-size: 13px; color: var(--muted); width: 34px; text-align: right; }
+  .knapp {
+    background: var(--brand);
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 7px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 14px;
+  }
+  .knapp:hover { opacity: 0.92; }
+  .knapp.sekundaer {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .knapp.faresone {
+    background: #b3453a;
+  }
+  .smaknapp {
+    background: #efece6;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #adresse-treff {
+    margin-top: 8px;
+    display: none;
+  }
+  #adresse-treff div {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  #adresse-treff div:hover { background: #f2efe9; }
+  #plassering-kart, #stil-forhandsvisning {
+    height: 260px;
+    border-radius: 8px;
+    margin-top: 10px;
+    border: 1px solid var(--border);
+  }
+  .koord-info {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  td.handlinger { white-space: nowrap; text-align: right; }
+  td.handlinger button { margin-left: 6px; }
+  #status-melding {
+    font-size: 13px;
+    margin-top: 10px;
+    min-height: 18px;
+  }
+  #status-melding.ok { color: #2e7d32; }
+  #status-melding.feil { color: #b3453a; }
+
+  #innlogging {
+    max-width: 360px;
+    margin: 80px auto;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+  }
+  #innlogging h1 { font-size: 18px; margin-top: 0; }
+  #innlogging-feil { color: #b3453a; font-size: 13px; margin-top: 10px; min-height: 16px; }
+
+  #ikke-konfigurert {
+    max-width: 480px;
+    margin: 80px auto;
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<div id="ikke-konfigurert" style="display:none">
+  Backend er ikke koblet til en database ennå.<br><br>
+  Fyll inn dine egne verdier i <code>firebase-config.js</code> for å komme i gang.
+</div>
+
+<div id="innlogging" style="display:none">
+  <h1>Logg inn – Forhandlerkart</h1>
+  <label for="epost">E-post</label>
+  <input type="email" id="epost" autocomplete="username">
+  <label for="passord">Passord</label>
+  <input type="password" id="passord" autocomplete="current-password">
+  <button class="knapp" style="width:100%" onclick="loggInn()">Logg inn</button>
+  <div id="innlogging-feil"></div>
+</div>
+
+<header id="topplinje" style="display:none">
+  <h1>Graabein Skjegg – Forhandlerkart (backend)</h1>
+  <button onclick="loggUt()">Logg ut</button>
+</header>
+
+<main id="innhold">
+  <div class="grid">
+
+    <!-- Legg til / rediger forhandler -->
+    <div class="card">
+      <h2 id="skjema-tittel">Legg til forhandler</h2>
+
+      <label for="f-navn">Navn på forhandler</label>
+      <input type="text" id="f-navn" placeholder="f.eks. Fardin Barbershop">
+
+      <label for="f-adresse">Adresse</label>
+      <input type="text" id="f-adresse" placeholder="Gate, husnummer, sted">
+      <button class="smaknapp" style="margin-top:8px" onclick="sokAdresse()">Finn adresse på kart</button>
+      <div id="adresse-treff"></div>
+
+      <label>Plassering (dra prikken for å justere)</label>
+      <div id="plassering-kart"></div>
+      <div class="koord-info" id="koord-info">Ingen plassering valgt ennå.</div>
+
+      <label for="f-kategori">Kategori (valgfritt)</label>
+      <input type="text" id="f-kategori" placeholder="f.eks. Barbershop, nettbutikk-samarbeid">
+
+      <label for="f-notat">Notat som vises ved hover (valgfritt)</label>
+      <textarea id="f-notat" placeholder="f.eks. åpningstider, kontaktperson"></textarea>
+
+      <button class="knapp" onclick="lagreForhandler()">Lagre forhandler</button>
+      <button class="knapp sekundaer" onclick="nyttSkjema()" style="display:none" id="avbryt-knapp">Avbryt redigering</button>
+      <div id="status-melding"></div>
+    </div>
+
+    <!-- Stil -->
+    <div class="card">
+      <h2>Utseende på kartet</h2>
+
+      <label for="s-tile">Kartbunn</label>
+      <select id="s-tile">
+        <option value="lys">Lys (anbefalt)</option>
+        <option value="standard">Standard OpenStreetMap</option>
+        <option value="voyager">Voyager (fargerik, myk)</option>
+        <option value="mork">Mørk</option>
+      </select>
+
+      <label for="s-farge">Prikkfarge</label>
+      <input type="color" id="s-farge" value="#8B4513">
+
+      <label for="s-kant">Kantfarge på prikk</label>
+      <input type="color" id="s-kant" value="#ffffff">
+
+      <label>Prikkstørrelse</label>
+      <div class="rad"><input type="range" id="s-storrelse" min="4" max="20" value="8"><span id="s-storrelse-verdi">8</span></div>
+
+      <label>Kanttykkelse</label>
+      <div class="rad"><input type="range" id="s-kanttykkelse" min="0" max="6" value="2"><span id="s-kanttykkelse-verdi">2</span></div>
+
+      <label>Forhåndsvisning</label>
+      <div id="stil-forhandsvisning"></div>
+
+      <button class="knapp" onclick="lagreStil()">Lagre utseende</button>
+      <div id="stil-status"></div>
+    </div>
+  </div>
+
+  <!-- Liste -->
+  <div class="card">
+    <h2>Forhandlere (<span id="antall-forhandlere">0</span>)</h2>
+    <table>
+      <thead>
+        <tr><th>Navn</th><th>Adresse</th><th>Kategori</th><th></th></tr>
+      </thead>
+      <tbody id="forhandler-liste"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+  // ------------------------------------------------------------------
+  // Oppsett
+  // ------------------------------------------------------------------
+  function erKonfigurert() {
+    return typeof firebaseConfig !== "undefined" &&
+      firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("DIN_API_KEY");
+  }
+
+  if (!erKonfigurert()) {
+    document.getElementById("ikke-konfigurert").style.display = "block";
+  } else {
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    const kartstiler = {
+      lys: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      standard: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      mork: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      voyager: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+    };
+
+    // ------------------------------------------------------------------
+    // Innlogging
+    // ------------------------------------------------------------------
+    window.loggInn = function () {
+      const epost = document.getElementById("epost").value.trim();
+      const passord = document.getElementById("passord").value;
+      document.getElementById("innlogging-feil").textContent = "";
+      auth.signInWithEmailAndPassword(epost, passord).catch(err => {
+        document.getElementById("innlogging-feil").textContent =
+          "Klarte ikke å logge inn: " + oversettFeil(err.code);
+      });
+    };
+
+    window.loggUt = function () { auth.signOut(); };
+
+    function oversettFeil(kode) {
+      const oversettelser = {
+        "auth/invalid-email": "ugyldig e-postadresse.",
+        "auth/user-not-found": "fant ingen bruker med denne e-posten.",
+        "auth/wrong-password": "feil passord.",
+        "auth/invalid-credential": "feil e-post eller passord.",
+        "auth/too-many-requests": "for mange forsøk, prøv igjen senere."
+      };
+      return oversettelser[kode] || kode;
+    }
+
+    auth.onAuthStateChanged(bruker => {
+      document.getElementById("innlogging").style.display = bruker ? "none" : "block";
+      document.getElementById("topplinje").style.display = bruker ? "flex" : "none";
+      document.getElementById("innhold").style.display = bruker ? "block" : "none";
+      if (bruker) start();
+    });
+
+    // ------------------------------------------------------------------
+    // Kart for plassering av ny/redigert forhandler
+    // ------------------------------------------------------------------
+    let plasseringsKart, plasseringsMarkor, plasseringsLag;
+    let redigererId = null;
+
+    function settOppPlasseringsKart() {
+      plasseringsKart = L.map("plassering-kart", { zoomControl: true }).setView([64.5, 12.5], 4.3);
+      plasseringsLag = L.tileLayer(kartstiler.lys, { subdomains: "abcd", maxZoom: 19 }).addTo(plasseringsKart);
+      plasseringsMarkor = L.marker([64.5, 12.5], { draggable: true });
+      plasseringsMarkor.on("dragend", oppdaterKoordInfo);
+    }
+
+    function visMarkorPa(lat, lng) {
+      if (!plasseringsKart.hasLayer(plasseringsMarkor)) plasseringsMarkor.addTo(plasseringsKart);
+      plasseringsMarkor.setLatLng([lat, lng]);
+      plasseringsKart.setView([lat, lng], 12);
+      oppdaterKoordInfo();
+    }
+
+    function oppdaterKoordInfo() {
+      const pos = plasseringsMarkor.getLatLng();
+      document.getElementById("koord-info").textContent =
+        "Valgt posisjon: " + pos.lat.toFixed(5) + ", " + pos.lng.toFixed(5) + " — dra prikken for å justere.";
+    }
+
+    // ------------------------------------------------------------------
+    // Adressesøk (Kartverkets åpne adresse-API)
+    // ------------------------------------------------------------------
+    window.sokAdresse = function () {
+      const sok = document.getElementById("f-adresse").value.trim();
+      const treffboks = document.getElementById("adresse-treff");
+      treffboks.innerHTML = "";
+      treffboks.style.display = "none";
+      if (!sok) return;
+
+      fetch("https://ws.geonorge.no/adresser/v1/sok?sok=" + encodeURIComponent(sok) + "&treffPerSide=6")
+        .then(r => r.json())
+        .then(data => {
+          const treff = (data && data.adresser) || [];
+          if (treff.length === 0) {
+            treffboks.innerHTML = "<div style='cursor:default'>Fant ingen treff — dra prikken i kartet manuelt.</div>";
+            treffboks.style.display = "block";
+            return;
+          }
+          treff.forEach(adr => {
+            const punkt = adr.representasjonspunkt || {};
+            const div = document.createElement("div");
+            div.textContent = (adr.adressetekst || sok) + ", " + (adr.poststed || "");
+            div.onclick = () => {
+              if (typeof punkt.lat === "number" && typeof punkt.lon === "number") {
+                visMarkorPa(punkt.lat, punkt.lon);
+              }
+              document.getElementById("f-adresse").value = (adr.adressetekst || sok) + ", " + (adr.poststed || "");
+              treffboks.style.display = "none";
+            };
+            treffboks.appendChild(div);
+          });
+          treffboks.style.display = "block";
+        })
+        .catch(() => {
+          treffboks.innerHTML = "<div style='cursor:default'>Adressesøket er utilgjengelig akkurat nå — dra prikken i kartet manuelt for å plassere forhandleren.</div>";
+          treffboks.style.display = "block";
+        });
+    };
+
+    // ------------------------------------------------------------------
+    // Lagre / rediger / slette forhandler
+    // ------------------------------------------------------------------
+    window.lagreForhandler = function () {
+      const navn = document.getElementById("f-navn").value.trim();
+      const adresse = document.getElementById("f-adresse").value.trim();
+      const kategori = document.getElementById("f-kategori").value.trim();
+      const notat = document.getElementById("f-notat").value.trim();
+      const meldingEl = document.getElementById("status-melding");
+
+      if (!navn) {
+        meldingEl.textContent = "Skriv inn navn på forhandleren.";
+        meldingEl.className = "feil";
+        return;
+      }
+      if (!plasseringsKart.hasLayer(plasseringsMarkor)) {
+        meldingEl.textContent = "Velg en plassering i kartet (søk adresse, eller klikk/dra i kartet).";
+        meldingEl.className = "feil";
+        return;
+      }
+
+      const pos = plasseringsMarkor.getLatLng();
+      const data = {
+        navn, adresse, kategori, notat,
+        lat: pos.lat, lng: pos.lng,
+        oppdatert: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      const lagring = redigererId
+        ? db.collection("retailers").doc(redigererId).update(data)
+        : db.collection("retailers").add({ ...data, opprettet: firebase.firestore.FieldValue.serverTimestamp() });
+
+      lagring.then(() => {
+        meldingEl.textContent = redigererId ? "Forhandler oppdatert." : "Forhandler lagret.";
+        meldingEl.className = "ok";
+        nyttSkjema();
+      }).catch(err => {
+        meldingEl.textContent = "Noe gikk galt: " + err.message;
+        meldingEl.className = "feil";
+      });
+    };
+
+    window.nyttSkjema = function () {
+      redigererId = null;
+      document.getElementById("skjema-tittel").textContent = "Legg til forhandler";
+      document.getElementById("avbryt-knapp").style.display = "none";
+      document.getElementById("f-navn").value = "";
+      document.getElementById("f-adresse").value = "";
+      document.getElementById("f-kategori").value = "";
+      document.getElementById("f-notat").value = "";
+      document.getElementById("koord-info").textContent = "Ingen plassering valgt ennå.";
+      document.getElementById("adresse-treff").style.display = "none";
+      if (plasseringsKart.hasLayer(plasseringsMarkor)) plasseringsKart.removeLayer(plasseringsMarkor);
+      plasseringsKart.setView([64.5, 12.5], 4.3);
+    };
+
+    window.redigerForhandler = function (id, d) {
+      redigererId = id;
+      document.getElementById("skjema-tittel").textContent = "Rediger forhandler";
+      document.getElementById("avbryt-knapp").style.display = "inline-block";
+      document.getElementById("f-navn").value = d.navn || "";
+      document.getElementById("f-adresse").value = d.adresse || "";
+      document.getElementById("f-kategori").value = d.kategori || "";
+      document.getElementById("f-notat").value = d.notat || "";
+      if (typeof d.lat === "number" && typeof d.lng === "number") {
+        visMarkorPa(d.lat, d.lng);
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    window.slettForhandler = function (id, navn) {
+      if (!confirm('Slette forhandleren "' + navn + '"? Dette kan ikke angres.')) return;
+      db.collection("retailers").doc(id).delete();
+    };
+
+    function tegnListe(dokumenter) {
+      const tbody = document.getElementById("forhandler-liste");
+      tbody.innerHTML = "";
+      document.getElementById("antall-forhandlere").textContent = dokumenter.length;
+      dokumenter.forEach(doc => {
+        const d = doc.data();
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + escapeHtml(d.navn || "") + "</td>" +
+          "<td>" + escapeHtml(d.adresse || "") + "</td>" +
+          "<td>" + escapeHtml(d.kategori || "") + "</td>";
+        const tdKnapper = document.createElement("td");
+        tdKnapper.className = "handlinger";
+        const redKnapp = document.createElement("button");
+        redKnapp.className = "smaknapp";
+        redKnapp.textContent = "Rediger";
+        redKnapp.onclick = () => window.redigerForhandler(doc.id, d);
+        const sletKnapp = document.createElement("button");
+        sletKnapp.className = "smaknapp";
+        sletKnapp.textContent = "Slett";
+        sletKnapp.onclick = () => window.slettForhandler(doc.id, d.navn || "");
+        tdKnapper.appendChild(redKnapp);
+        tdKnapper.appendChild(sletKnapp);
+        tr.appendChild(tdKnapper);
+        tbody.appendChild(tr);
+      });
+    }
+
+    function escapeHtml(tekst) {
+      const div = document.createElement("div");
+      div.textContent = tekst;
+      return div.innerHTML;
+    }
+
+    // ------------------------------------------------------------------
+    // Stilpanel
+    // ------------------------------------------------------------------
+    let forhandsvisningsKart, forhandsvisningsLag, forhandsvisningsPrikk;
+
+    function settOppForhandsvisning() {
+      forhandsvisningsKart = L.map("stil-forhandsvisning", {
+        zoomControl: false, dragging: false, scrollWheelZoom: false
+      }).setView([64.5, 12.5], 4);
+      forhandsvisningsLag = L.tileLayer(kartstiler.lys, { subdomains: "abcd", maxZoom: 19 }).addTo(forhandsvisningsKart);
+      oppdaterForhandsvisning();
+    }
+
+    function lesStilFraSkjema() {
+      return {
+        tileStyle: document.getElementById("s-tile").value,
+        dotColor: document.getElementById("s-farge").value,
+        dotBorderColor: document.getElementById("s-kant").value,
+        dotSize: Number(document.getElementById("s-storrelse").value),
+        dotBorderWidth: Number(document.getElementById("s-kanttykkelse").value)
+      };
+    }
+
+    function oppdaterForhandsvisning() {
+      const stil = lesStilFraSkjema();
+      document.getElementById("s-storrelse-verdi").textContent = stil.dotSize;
+      document.getElementById("s-kanttykkelse-verdi").textContent = stil.dotBorderWidth;
+
+      forhandsvisningsKart.removeLayer(forhandsvisningsLag);
+      forhandsvisningsLag = L.tileLayer(kartstiler[stil.tileStyle] || kartstiler.lys, {
+        subdomains: "abcd", maxZoom: 19
+      }).addTo(forhandsvisningsKart);
+
+      if (forhandsvisningsPrikk) forhandsvisningsKart.removeLayer(forhandsvisningsPrikk);
+      forhandsvisningsPrikk = L.circleMarker([64.5, 12.5], {
+        radius: stil.dotSize,
+        fillColor: stil.dotColor,
+        fillOpacity: 0.9,
+        color: stil.dotBorderColor,
+        weight: stil.dotBorderWidth,
+        opacity: 1
+      }).addTo(forhandsvisningsKart);
+    }
+
+    ["s-tile", "s-farge", "s-kant", "s-storrelse", "s-kanttykkelse"].forEach(id => {
+      document.getElementById(id).addEventListener("input", oppdaterForhandsvisning);
+    });
+
+    window.lagreStil = function () {
+      const stil = lesStilFraSkjema();
+      const statusEl = document.getElementById("stil-status");
+      db.collection("settings").doc("style").set(stil, { merge: true }).then(() => {
+        statusEl.textContent = "Utseende lagret — kartet oppdateres automatisk.";
+        statusEl.className = "ok";
+      }).catch(err => {
+        statusEl.textContent = "Noe gikk galt: " + err.message;
+        statusEl.className = "feil";
+      });
+    };
+
+    function lastInnLagretStil() {
+      db.collection("settings").doc("style").get().then(snap => {
+        if (!snap.exists) return;
+        const d = snap.data();
+        if (d.tileStyle) document.getElementById("s-tile").value = d.tileStyle;
+        if (d.dotColor) document.getElementById("s-farge").value = d.dotColor;
+        if (d.dotBorderColor) document.getElementById("s-kant").value = d.dotBorderColor;
+        if (typeof d.dotSize === "number") document.getElementById("s-storrelse").value = d.dotSize;
+        if (typeof d.dotBorderWidth === "number") document.getElementById("s-kanttykkelse").value = d.dotBorderWidth;
+        oppdaterForhandsvisning();
+      });
+    }
+
+    // ------------------------------------------------------------------
+    // Start alt sammen når man er logget inn
+    // ------------------------------------------------------------------
+    let startet = false;
+    function start() {
+      if (startet) return;
+      startet = true;
+      settOppPlasseringsKart();
+      settOppForhandsvisning();
+      lastInnLagretStil();
+      db.collection("retailers").orderBy("navn").onSnapshot(
+        snap => tegnListe(snap.docs),
+        () => tegnListe([])
+      );
+    }
+  }
+</script>
+
+</body>
+</html>

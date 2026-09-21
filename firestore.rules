@@ -1,0 +1,38 @@
+// ============================================================
+// Sikkerhetsregler for Firestore-databasen bak forhandlerkartet.
+//
+// Slik limer du dette inn:
+// 1. Gå til Firebase Console -> ditt prosjekt -> Firestore Database
+// 2. Klikk på fanen "Rules" (Regler) øverst
+// 3. Slett det som står der, og lim inn alt under denne blokken
+// 4. Klikk "Publish" (Publiser)
+//
+// Hva reglene gjør:
+// - Alle (også besøkende på nettsiden din) kan LESE forhandlere
+//   og stilinnstillinger — det er det som gjør at kart.html virker.
+// - Kun den innloggede admin-brukeren (deg, opprettet under
+//   Authentication) kan LEGGE TIL, ENDRE og SLETTE forhandlere
+//   eller stilinnstillinger.
+// ============================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /retailers/{retailerId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Alt annet er stengt som standard.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

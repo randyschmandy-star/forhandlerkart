@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forhandlerkart</title>
+
+<!-- Leaflet (kartbiblioteket) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<!-- Firebase (databasen som holder forhandlerne dine) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<!-- Din egen konfigurasjon -->
+<script src="firebase-config.js"></script>
+
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  #kart-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 480px;
+  }
+  #kart {
+    width: 100%;
+    height: 100%;
+    min-height: 480px;
+    background: #eef2f5;
+  }
+  .leaflet-tooltip.forhandler-tooltip {
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.4;
+    padding: 8px 10px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  }
+  .forhandler-tooltip b {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+  #feilmelding {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    background: #f7f7f7;
+    color: #444;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div id="kart-wrapper">
+  <div id="kart"></div>
+  <div id="feilmelding">
+    Kartet er ikke koblet til en database ennå.<br>
+    Fyll inn dine egne verdier i <code>firebase-config.js</code> for å komme i gang.
+  </div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------
+  // Standardstil (brukes helt til det er lagret noe annet i "settings"
+  // i Firestore via admin-siden)
+  // ---------------------------------------------------------------
+  const standardStil = {
+    dotColor: "#8B4513",
+    dotBorderColor: "#ffffff",
+    dotBorderWidth: 2,
+    dotSize: 8,
+    popupBg: "#ffffff",
+    popupText: "#222222",
+    tileStyle: "lys"
+  };
+
+  const kartstiler = {
+    lys: {
+      url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    },
+    standard: {
+      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere'
+    },
+    mork: {
+      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    },
+    voyager: {
+      url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    }
+  };
+
+  function erKonfigurert() {
+    return typeof firebaseConfig !== "undefined" &&
+      firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("DIN_API_KEY");
+  }
+
+  function visFeilmelding() {
+    document.getElementById("feilmelding").style.display = "flex";
+    document.getElementById("kart").style.display = "none";
+  }
+
+  function lagKart(stil) {
+    const kart = L.map("kart", {
+      center: [64.5, 12.5],
+      zoom: 4.3,
+      minZoom: 3,
+      maxZoom: 18,
+      zoomControl: true
+    });
+
+    const valgtStil = kartstiler[stil.tileStyle] || kartstiler.lys;
+    L.tileLayer(valgtStil.url, {
+      attribution: valgtStil.attribution,
+      maxZoom: 19,
+      subdomains: "abcd"
+    }).addTo(kart);
+
+    return kart;
+  }
+
+  function tegnPrikk(kart, forhandler, stil) {
+    if (typeof forhandler.lat !== "number" || typeof forhandler.lng !== "number") return null;
+
+    const prikk = L.circleMarker([forhandler.lat, forhandler.lng], {
+      radius: stil.dotSize,
+      fillColor: stil.dotColor,
+      fillOpacity: 0.9,
+      color: stil.dotBorderColor,
+      weight: stil.dotBorderWidth,
+      opacity: 1
+    }).addTo(kart);
+
+    let innhold = `<b>${escapeHtml(forhandler.navn || "Uten navn")}</b>`;
+    if (forhandler.adresse) innhold += `${escapeHtml(forhandler.adresse)}<br>`;
+    if (forhandler.kategori) innhold += `<i>${escapeHtml(forhandler.kategori)}</i><br>`;
+    if (forhandler.notat) innhold += `${escapeHtml(forhandler.notat)}`;
+
+    prikk.bindTooltip(innhold, {
+      className: "forhandler-tooltip",
+      sticky: true,
+      direction: "top",
+      offset: [0, -4]
+    });
+
+    return prikk;
+  }
+
+  function escapeHtml(tekst) {
+    const div = document.createElement("div");
+    div.textContent = tekst;
+    return div.innerHTML;
+  }
+
+  // ---------------------------------------------------------------
+  // Start
+  // ---------------------------------------------------------------
+  if (!erKonfigurert()) {
+    visFeilmelding();
+  } else {
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let gjeldendeStil = { ...standardStil };
+    let gjeldendeDokumenter = [];
+    let kart = null;
+    let prikker = [];
+
+    function sikreKart() {
+      if (!kart) {
+        kart = lagKart(gjeldendeStil);
+        kart._gjeldendeTileStyle = gjeldendeStil.tileStyle;
+        return;
+      }
+      if (kart._gjeldendeTileStyle !== gjeldendeStil.tileStyle) {
+        kart.remove();
+        kart = lagKart(gjeldendeStil);
+        kart._gjeldendeTileStyle = gjeldendeStil.tileStyle;
+      }
+    }
+
+    function tegnAlleForhandlere() {
+      prikker.forEach(p => kart.removeLayer(p));
+      prikker = [];
+      gjeldendeDokumenter.forEach(doc => {
+        const prikk = tegnPrikk(kart, doc.data(), gjeldendeStil);
+        if (prikk) prikker.push(prikk);
+      });
+    }
+
+    // Lytt etter stil og forhandlere i sanntid, slik at kartet oppdaterer
+    // seg selv med en gang noe endres i admin-panelet.
+    db.collection("settings").doc("style").onSnapshot(styleSnap => {
+      gjeldendeStil = styleSnap.exists ? { ...standardStil, ...styleSnap.data() } : { ...standardStil };
+      sikreKart();
+      tegnAlleForhandlere();
+    }, err => { console.error(err); visFeilmelding(); });
+
+    db.collection("retailers").onSnapshot(snapshot => {
+      gjeldendeDokumenter = snapshot.docs;
+      sikreKart();
+      tegnAlleForhandlere();
+    }, err => { console.error(err); visFeilmelding(); });
+  }
+</script>
+
+</body>
+</html>
