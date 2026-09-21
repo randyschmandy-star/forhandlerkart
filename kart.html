@@ -85,26 +85,33 @@
     dotSize: 8,
     popupBg: "#ffffff",
     popupText: "#222222",
-    tileStyle: "lys"
+    tileStyle: "standard"
   };
 
-  const kartstiler = {
-    lys: {
-      url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere &copy; <a href="https://carto.com/attributions">CARTO</a>'
-    },
-    standard: {
-      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere'
-    },
-    mork: {
-      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere &copy; <a href="https://carto.com/attributions">CARTO</a>'
-    },
-    voyager: {
-      url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  const OSM_STIL = {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere'
+  };
+
+  // CARTO krever nå en gratis API-nøkkel for sine fargede kartbunner
+  // (lys/mørk/voyager). Har du ikke fylt inn CARTO_API_KEY i
+  // firebase-config.js, faller disse stilene automatisk tilbake til
+  // vanlig OpenStreetMap, slik at kartet aldri viser "API key required".
+  function cartoEllerOsm(cartoSti) {
+    if (typeof CARTO_API_KEY !== "undefined" && CARTO_API_KEY) {
+      return {
+        url: "https://{s}.basemaps.cartocdn.com/" + cartoSti + "/{z}/{x}/{y}{r}.png?api_key=" + encodeURIComponent(CARTO_API_KEY),
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      };
     }
+    return OSM_STIL;
+  }
+
+  const kartstiler = {
+    standard: OSM_STIL,
+    lys: cartoEllerOsm("light_all"),
+    mork: cartoEllerOsm("dark_all"),
+    voyager: cartoEllerOsm("rastertiles/voyager")
   };
 
   function erKonfigurert() {
@@ -126,7 +133,7 @@
       zoomControl: true
     });
 
-    const valgtStil = kartstiler[stil.tileStyle] || kartstiler.lys;
+    const valgtStil = kartstiler[stil.tileStyle] || kartstiler.standard;
     L.tileLayer(valgtStil.url, {
       attribution: valgtStil.attribution,
       maxZoom: 19,

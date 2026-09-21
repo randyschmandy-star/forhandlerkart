@@ -35,3 +35,18 @@ const firebaseConfig = {
   messagingSenderId: "103915064718",
   appId: "1:103915064718:web:c6a3f03a7893b7102a68df"
 };
+
+/*
+  ====================================================================
+  VALGFRITT: penere kartbunn-farger (lys/mørk/voyager)
+  ====================================================================
+  Kartet fungerer helt fint uten dette — det bruker da vanlig
+  OpenStreetMap, som alltid er gratis og krever ingen nøkkel.
+
+  Vil du ha de litt penere, dempede fargevariantene fra CARTO, er det
+  gratis, men krever en rask registrering:
+  1. Gå til https://carto.com/basemaps/apikey/
+  2. Opprett en gratis konto og hent en API-nøkkel
+  3. Lim nøkkelen inn under, mellom anførselstegnene
+*/
+const CARTO_API_KEY = "";

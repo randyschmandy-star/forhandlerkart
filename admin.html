@@ -238,10 +238,10 @@
 
       <label for="s-tile">Kartbunn</label>
       <select id="s-tile">
-        <option value="lys">Lys (anbefalt)</option>
-        <option value="standard">Standard OpenStreetMap</option>
-        <option value="voyager">Voyager (fargerik, myk)</option>
-        <option value="mork">Mørk</option>
+        <option value="standard" selected>Standard OpenStreetMap (anbefalt, fungerer alltid)</option>
+        <option value="lys">Lys (krever gratis API-nøkkel, se firebase-config.js)</option>
+        <option value="voyager">Voyager (krever gratis API-nøkkel)</option>
+        <option value="mork">Mørk (krever gratis API-nøkkel)</option>
       </select>
 
       <label for="s-farge">Prikkfarge</label>
@@ -292,11 +292,23 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
 
+    const OSM_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+    // CARTO krever nå en gratis API-nøkkel for de fargede kartbunnene.
+    // Uten nøkkel (CARTO_API_KEY i firebase-config.js) faller disse
+    // automatisk tilbake til vanlig OpenStreetMap.
+    function cartoUrlEllerOsm(cartoSti) {
+      if (typeof CARTO_API_KEY !== "undefined" && CARTO_API_KEY) {
+        return "https://{s}.basemaps.cartocdn.com/" + cartoSti + "/{z}/{x}/{y}{r}.png?api_key=" + encodeURIComponent(CARTO_API_KEY);
+      }
+      return OSM_URL;
+    }
+
     const kartstiler = {
-      lys: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-      standard: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      mork: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      voyager: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+      standard: OSM_URL,
+      lys: cartoUrlEllerOsm("light_all"),
+      mork: cartoUrlEllerOsm("dark_all"),
+      voyager: cartoUrlEllerOsm("rastertiles/voyager")
     };
 
     // ------------------------------------------------------------------
@@ -340,7 +352,7 @@
 
     function settOppPlasseringsKart() {
       plasseringsKart = L.map("plassering-kart", { zoomControl: true }).setView([64.5, 12.5], 4.3);
-      plasseringsLag = L.tileLayer(kartstiler.lys, { subdomains: "abcd", maxZoom: 19 }).addTo(plasseringsKart);
+      plasseringsLag = L.tileLayer(kartstiler.standard, { subdomains: "abcd", maxZoom: 19 }).addTo(plasseringsKart);
       plasseringsMarkor = L.marker([64.5, 12.5], { draggable: true });
       plasseringsMarkor.on("dragend", oppdaterKoordInfo);
     }
@@ -516,7 +528,7 @@
       forhandsvisningsKart = L.map("stil-forhandsvisning", {
         zoomControl: false, dragging: false, scrollWheelZoom: false
       }).setView([64.5, 12.5], 4);
-      forhandsvisningsLag = L.tileLayer(kartstiler.lys, { subdomains: "abcd", maxZoom: 19 }).addTo(forhandsvisningsKart);
+      forhandsvisningsLag = L.tileLayer(kartstiler.standard, { subdomains: "abcd", maxZoom: 19 }).addTo(forhandsvisningsKart);
       oppdaterForhandsvisning();
     }
 
@@ -536,7 +548,7 @@
       document.getElementById("s-kanttykkelse-verdi").textContent = stil.dotBorderWidth;
 
       forhandsvisningsKart.removeLayer(forhandsvisningsLag);
-      forhandsvisningsLag = L.tileLayer(kartstiler[stil.tileStyle] || kartstiler.lys, {
+      forhandsvisningsLag = L.tileLayer(kartstiler[stil.tileStyle] || kartstiler.standard, {
         subdomains: "abcd", maxZoom: 19
       }).addTo(forhandsvisningsKart);
 
