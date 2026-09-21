@@ -89,7 +89,7 @@
   };
 
   const OSM_STIL = {
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-bidragsytere'
   };
 
@@ -124,14 +124,20 @@
     document.getElementById("kart").style.display = "none";
   }
 
+  // Norge (fastlandet) — brukes til å tilpasse startvisningen
+  const NORGE_GRENSER = L.latLngBounds([57.8, 4.0], [71.3, 31.2]);
+  // Litt romsligere grenser (dekker Norden) — hvor langt man kan panorere/zoome ut
+  const VISNINGS_GRENSER = L.latLngBounds([53.5, -6.0], [72.5, 33.0]);
+
   function lagKart(stil) {
     const kart = L.map("kart", {
-      center: [64.5, 12.5],
-      zoom: 4.3,
-      minZoom: 3,
+      minZoom: 4,
       maxZoom: 18,
-      zoomControl: true
+      zoomControl: true,
+      maxBounds: VISNINGS_GRENSER,
+      maxBoundsViscosity: 1.0
     });
+    kart.fitBounds(NORGE_GRENSER);
 
     const valgtStil = kartstiler[stil.tileStyle] || kartstiler.standard;
     L.tileLayer(valgtStil.url, {
